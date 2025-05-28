@@ -24,7 +24,7 @@ jobs:
       - name: Build binary
         run: |
           go mod tidy
-          go build -o hamster-linux-amd64 .
+          go build -o hamster-linux-amd64 ./cmd/server
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
