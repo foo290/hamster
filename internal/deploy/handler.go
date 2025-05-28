@@ -2,38 +2,56 @@ package deploy
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 func HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	expectedToken := os.Getenv("DEPLOY_TOKEN")
-	auth := r.Header.Get("Authorization")
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+
+	if expectedToken == "" {
+		http.Error(w, "DEPLOY_TOKEN not set", http.StatusInternalServerError)
+		log.Println("❌ DEPLOY_TOKEN missing in env")
+		return
+	}
 
 	if auth != "Bearer "+expectedToken {
 		http.Error(w, "Unauthorized", http.StatusForbidden)
+		log.Printf("❌ Unauthorized access attempt: got token %q\n", auth)
 		return
 	}
 
-	deployment := os.Getenv("K8S_DEPLOYMENT_NAME")
-	if deployment == "" {
-		http.Error(w, "K8S_DEPLOYMENT_NAME not set", http.StatusInternalServerError)
+	composeDir := os.Getenv("COMPOSE_PROJECT_DIR")
+	if composeDir == "" {
+		http.Error(w, "COMPOSE_PROJECT_DIR not set", http.StatusInternalServerError)
+		log.Println("❌ COMPOSE_PROJECT_DIR not set in env")
 		return
 	}
 
-	namespace := os.Getenv("K8S_NAMESPACE")
-	if namespace == "" {
-		namespace = "default"
+	// Run `docker compose pull` and `docker compose up -d --no-deps --build` in that directory
+	pullCmd := exec.Command("docker", "compose", "pull")
+	pullCmd.Dir = composeDir
+
+	upCmd := exec.Command("docker", "compose", "up", "-d", "--build")
+	upCmd.Dir = composeDir
+
+	if output, err := pullCmd.CombinedOutput(); err != nil {
+		http.Error(w, fmt.Sprintf("❌ Error pulling images:\n%s", output), http.StatusInternalServerError)
+		log.Printf("❌ docker compose pull failed: %s", output)
+		return
 	}
 
-	cmd := exec.Command("kubectl", "rollout", "restart", fmt.Sprintf("deployment/%s", deployment), "-n", namespace)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		http.Error(w, fmt.Sprintf("❌ Error: %s", output), http.StatusInternalServerError)
+	if output, err := upCmd.CombinedOutput(); err != nil {
+		http.Error(w, fmt.Sprintf("❌ Error restarting services:\n%s", output), http.StatusInternalServerError)
+		log.Printf("❌ docker compose up failed: %s", output)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(fmt.Sprintf("✅ Restarted deployment: %s", output)))
+	w.Write([]byte("✅ Docker Compose deployment updated successfully"))
+	log.Println("✅ Docker Compose deployment updated successfully")
 }
