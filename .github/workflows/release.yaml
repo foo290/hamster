@@ -30,4 +30,4 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          files: hamster-linux-amd64
+          files: dist/hamster
