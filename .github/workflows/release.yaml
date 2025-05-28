@@ -7,7 +7,7 @@ on:
 
 permissions:
   contents: write
-  
+
 
 jobs:
   release:
@@ -37,13 +37,3 @@ jobs:
           release_name: Release ${{ github.ref_name }}
           draft: false
           prerelease: false
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./dist/hamster
-          asset_name: hamster-linux-amd64
-          asset_content_type: application/octet-stream
