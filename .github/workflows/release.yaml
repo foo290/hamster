@@ -25,7 +25,7 @@ jobs:
       - name: Build binary
         run: |
           mkdir -p dist
-          go build -o dist/hamster ./cmd/server
+          GOOS=linux GOARCH=amd64 go build -o dist/hamster ./cmd/server
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
