@@ -10,6 +10,10 @@ import (
 )
 
 func HandleDeploy(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
 	expectedToken := os.Getenv("DEPLOY_TOKEN")
 	auth := strings.TrimSpace(r.Header.Get("Authorization"))
 
