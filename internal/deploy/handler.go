@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"encoding/json"
 )
 
 func RunTransactionDataMigration(w http.ResponseWriter, r *http.Request) {
@@ -52,6 +53,7 @@ func HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
 	expectedToken := os.Getenv("DEPLOY_TOKEN")
 	auth := strings.TrimSpace(r.Header.Get("Authorization"))
 
@@ -67,14 +69,25 @@ func HandleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	composeDir := os.Getenv("COMPOSE_PROJECT_DIR")
-	if composeDir == "" {
-		http.Error(w, "COMPOSE_PROJECT_DIR not set", http.StatusInternalServerError)
-		log.Println("❌ COMPOSE_PROJECT_DIR not set in env")
+	// Parse JSON request body
+	var deployRequest struct {
+		ComposeDir string `json:"compose_dir"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&deployRequest); err != nil {
+		http.Error(w, "Invalid JSON payload", http.StatusBadRequest)
+		log.Printf("❌ Failed to parse request body: %s", err)
+		return
+	}
+
+	if deployRequest.ComposeDir == "" {
+		http.Error(w, "compose_dir is required in request", http.StatusBadRequest)
+		log.Println("❌ compose_dir missing in request")
 		return
 	}
 
 	// Run `docker compose pull` and `docker compose up -d --no-deps --build` in that directory
+	composeDir := os.Getenv("COMPOSE_PROJECT_DIR") + "/" + deployRequest.ComposeDir
 	pullCmd := exec.Command("docker", "compose", "pull")
 	pullCmd.Dir = composeDir
 
@@ -83,13 +96,13 @@ func HandleDeploy(w http.ResponseWriter, r *http.Request) {
 
 	if output, err := pullCmd.CombinedOutput(); err != nil {
 		http.Error(w, fmt.Sprintf("❌ Error pulling images:\n%s", output), http.StatusInternalServerError)
-		log.Printf("❌ docker compose pull failed: %s", output)
+		log.Printf("❌ docker compose pull failed: error: %s, output: %s", err, output)
 		return
 	}
 
 	if output, err := upCmd.CombinedOutput(); err != nil {
 		http.Error(w, fmt.Sprintf("❌ Error restarting services:\n%s", output), http.StatusInternalServerError)
-		log.Printf("❌ docker compose up failed: %s", output)
+		log.Printf("❌ docker compose up failed: error: %s, output: %s", err, output)
 		return
 	}
 
