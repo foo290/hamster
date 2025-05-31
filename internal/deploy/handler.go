@@ -9,6 +9,44 @@ import (
 	"strings"
 )
 
+func RunTransactionDataMigration(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	expectedToken := os.Getenv("MIGRATE_TOKEN")
+	auth := strings.TrimSpace(r.Header.Get("Authorization"))
+
+	if expectedToken == "" {
+		http.Error(w, "MIGRATE_TOKEN not set", http.StatusInternalServerError)
+		log.Println("❌ MIGRATE_TOKEN missing in env")
+		return
+	}
+
+	if auth != "Bearer "+expectedToken {
+		http.Error(w, "Unauthorized", http.StatusForbidden)
+		log.Printf("❌ Unauthorized access attempt: got token %q\n", auth)
+		return
+	}
+	financeDir := os.Getenv("FINANCE_DIR")
+	if financeDir == "" {
+		http.Error(w, "FINANCE_DIR not set", http.StatusInternalServerError)
+		log.Println("❌ FINANCE_DIR not set in env")
+		return
+	}
+	migrateCmd := exec.Command(financeDir+"/.venv/bin/python", financeDir+"/main.py")
+	migrateCmd.Dir = financeDir
+
+	if output, err := migrateCmd.CombinedOutput(); err != nil {
+		http.Error(w, fmt.Sprintf("❌ Error running migration:\n%s", output), http.StatusInternalServerError)
+		log.Printf("❌ migration failed: %s", err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("✅ Transaction data migration completed successfully"))
+	log.Println("✅ Transaction data migration completed successfully")
+}
+
 func HandleDeploy(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

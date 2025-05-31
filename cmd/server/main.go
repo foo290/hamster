@@ -17,6 +17,7 @@ func main() {
 	}
 
 	http.HandleFunc("/deploy", deploy.HandleDeploy)
+	http.HandleFunc("/migrate-transaction", deploy.RunTransactionDataMigration)
 
 	port := os.Getenv("PORT")
 	if port == "" {
